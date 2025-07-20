@@ -1,0 +1,7 @@
+# This directory will contain uploaded files
+# 
+# During development and production, files uploaded through the API
+# will be stored here (unless MinIO is configured).
+#
+# This .gitkeep file ensures the directory is tracked by Git
+# but actual uploaded files are ignored via .gitignore
