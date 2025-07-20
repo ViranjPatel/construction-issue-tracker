@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "test": "jest"
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
   "dependencies": {
     "express": "^4.18.2",
@@ -24,8 +26,26 @@
   },
   "devDependencies": {
     "nodemon": "^2.0.22",
-    "jest": "^29.5.0"
+    "jest": "^29.5.0",
+    "supertest": "^6.3.3"
   },
-  "keywords": ["construction", "issue-tracking", "project-management"],
-  "license": "MIT"
+  "jest": {
+    "testEnvironment": "node",
+    "collectCoverageFrom": [
+      "src/**/*.js",
+      "!src/server.js"
+    ],
+    "coverageDirectory": "coverage",
+    "coverageReporters": ["text", "lcov", "html"]
+  },
+  "keywords": ["construction", "issue-tracking", "project-management", "self-hosted", "open-source"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ViranjPatel/construction-issue-tracker.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ViranjPatel/construction-issue-tracker/issues"
+  },
+  "homepage": "https://github.com/ViranjPatel/construction-issue-tracker#readme"
 }
