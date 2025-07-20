@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Construction Issue Tracker</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { background: #2563eb; color: white; padding: 1rem; border-radius: 8px; margin-bottom: 2rem; }
+        .auth-form { background: white; padding: 2rem; border-radius: 8px; margin-bottom: 2rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .issues-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; }
+        .issue-card { background: white; padding: 1rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-left: 4px solid #10b981; }
+        .issue-card.high { border-left-color: #ef4444; }
+        .issue-card.critical { border-left-color: #dc2626; }
+        .status { display: inline-block; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 500; }
+        .status.open { background: #fef3c7; color: #92400e; }
+        .status.in_progress { background: #dbeafe; color: #1d4ed8; }
+        .status.resolved { background: #d1fae5; color: #065f46; }
+        .btn { padding: 0.5rem 1rem; border: none; border-radius: 4px; cursor: pointer; font-weight: 500; }
+        .btn-primary { background: #2563eb; color: white; }
+        .btn-success { background: #10b981; color: white; }
+        .btn-danger { background: #ef4444; color: white; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; font-weight: 500; }
+        .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 4px; }
+        .hidden { display: none; }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+        .stat-card { background: white; padding: 1rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }
+        .stat-number { font-size: 2rem; font-weight: bold; color: #2563eb; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏗️ Construction Issue Tracker</h1>
+            <p>Ultra-lightweight issue management for construction projects</p>
+        </div>
+
+        <!-- Authentication -->
+        <div id="auth-section" class="auth-form">
+            <h2>Login</h2>
+            <div class="form-group">
+                <label>Email:</label>
+                <input type="email" id="email" value="admin@construction.local">
+            </div>
+            <div class="form-group">
+                <label>Password:</label>
+                <input type="password" id="password" value="admin123">
+            </div>
+            <button class="btn btn-primary" onclick="login()">Login</button>
+        </div>
+
+        <!-- Main App -->
+        <div id="app-section" class="hidden">
+            <div id="stats" class="stats"></div>
+            
+            <div style="margin-bottom: 2rem;">
+                <button class="btn btn-success" onclick="showCreateForm()">+ New Issue</button>
+                <button class="btn btn-primary" onclick="loadIssues()">Refresh</button>
+                <select id="filterStatus" onchange="loadIssues()">
+                    <option value="">All Status</option>
+                    <option value="open">Open</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="resolved">Resolved</option>
+                </select>
+            </div>
+
+            <!-- Create Issue Form -->
+            <div id="create-form" class="auth-form hidden">
+                <h3>Create New Issue</h3>
+                <div class="form-group">
+                    <label>Title:</label>
+                    <input type="text" id="issueTitle" placeholder="Issue title">
+                </div>
+                <div class="form-group">
+                    <label>Description:</label>
+                    <textarea id="issueDescription" rows="3" placeholder="Describe the issue"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Category:</label>
+                    <select id="issueCategory">
+                        <option value="safety">Safety</option>
+                        <option value="quality">Quality</option>
+                        <option value="schedule">Schedule</option>
+                        <option value="defect">Defect</option>
+                        <option value="change_request">Change Request</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Priority:</label>
+                    <select id="issuePriority">
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                        <option value="critical">Critical</option>
+                    </select>
+                </div>
+                <button class="btn btn-success" onclick="createIssue()">Create Issue</button>
+                <button class="btn" onclick="hideCreateForm()">Cancel</button>
+            </div>
+
+            <!-- Issues List -->
+            <div id="issues-container" class="issues-grid"></div>
+        </div>
+    </div>
+
+    <script>
+        let authToken = localStorage.getItem('authToken');
+        let currentUser = null;
+        let ws = null;
+
+        // API Configuration
+        const API_BASE = '/api';
+
+        // Initialize
+        if (authToken) {
+            document.getElementById('auth-section').classList.add('hidden');
+            document.getElementById('app-section').classList.remove('hidden');
+            init();
+        }
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    authToken = data.token;
+                    currentUser = data.user;
+                    localStorage.setItem('authToken', authToken);
+                    
+                    document.getElementById('auth-section').classList.add('hidden');
+                    document.getElementById('app-section').classList.remove('hidden');
+                    init();
+                } else {
+                    alert(data.error || 'Login failed');
+                }
+            } catch (err) {
+                alert('Login error: ' + err.message);
+            }
+        }
+
+        async function init() {
+            setupWebSocket();
+            await loadProjects();
+            await loadIssues();
+        }
+
+        function setupWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${window.location.host}`);
+            
+            ws.onopen = () => {
+                console.log('WebSocket connected');
+                // Subscribe to project updates (using first project for demo)
+                ws.send(JSON.stringify({ type: 'subscribe', projectId: 'demo' }));
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                console.log('WebSocket message:', data);
+                
+                if (data.type === 'issue_created' || data.type === 'issue_updated') {
+                    loadIssues(); // Refresh issues list
+                }
+            };
+        }
+
+        async function apiCall(endpoint, options = {}) {
+            const response = await fetch(`${API_BASE}${endpoint}`, {
+                ...options,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${authToken}`,
+                    ...options.headers
+                }
+            });
+
+            if (response.status === 401) {
+                logout();
+                return;
+            }
+
+            return response.json();
+        }
+
+        async function loadProjects() {
+            try {
+                const data = await apiCall('/projects');
+                // For demo, we'll use the first project or create a demo one
+                console.log('Projects loaded:', data);
+            } catch (err) {
+                console.error('Load projects error:', err);
+            }
+        }
+
+        async function loadIssues() {
+            try {
+                const status = document.getElementById('filterStatus').value;
+                const params = new URLSearchParams();
+                if (status) params.append('status', status);
+                
+                const data = await apiCall(`/issues?${params}`);
+                displayIssues(data.issues || []);
+                
+                // Load stats
+                loadStats();
+            } catch (err) {
+                console.error('Load issues error:', err);
+            }
+        }
+
+        async function loadStats() {
+            try {
+                // For demo, we'll calculate basic stats from issues
+                const data = await apiCall('/issues');
+                const issues = data.issues || [];
+                
+                const stats = {
+                    total: issues.length,
+                    open: issues.filter(i => i.status === 'open').length,
+                    in_progress: issues.filter(i => i.status === 'in_progress').length,
+                    resolved: issues.filter(i => i.status === 'resolved').length
+                };
+
+                document.getElementById('stats').innerHTML = `
+                    <div class="stat-card">
+                        <div class="stat-number">${stats.total}</div>
+                        <div>Total Issues</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${stats.open}</div>
+                        <div>Open</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${stats.in_progress}</div>
+                        <div>In Progress</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${stats.resolved}</div>
+                        <div>Resolved</div>
+                    </div>
+                `;
+            } catch (err) {
+                console.error('Load stats error:', err);
+            }
+        }
+
+        function displayIssues(issues) {
+            const container = document.getElementById('issues-container');
+            
+            if (issues.length === 0) {
+                container.innerHTML = '<p>No issues found. Create your first issue!</p>';
+                return;
+            }
+
+            container.innerHTML = issues.map(issue => `
+                <div class="issue-card ${issue.priority}">
+                    <h3>${issue.title}</h3>
+                    <p>${issue.description || 'No description'}</p>
+                    <div style="margin: 1rem 0;">
+                        <span class="status ${issue.status}">${issue.status.replace('_', ' ')}</span>
+                        <span style="margin-left: 1rem; color: #6b7280;">Priority: ${issue.priority}</span>
+                    </div>
+                    <div style="font-size: 0.875rem; color: #6b7280;">
+                        Category: ${issue.category} | Created: ${new Date(issue.created_at).toLocaleDateString()}
+                    </div>
+                    <div style="margin-top: 1rem;">
+                        <button class="btn btn-primary" onclick="updateIssueStatus('${issue.id}', 'in_progress')">Start</button>
+                        <button class="btn btn-success" onclick="updateIssueStatus('${issue.id}', 'resolved')">Resolve</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function updateIssueStatus(issueId, status) {
+            try {
+                await apiCall(`/issues/${issueId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ status })
+                });
+                loadIssues(); // Refresh
+            } catch (err) {
+                alert('Failed to update issue status');
+                console.error('Update issue error:', err);
+            }
+        }
+
+        function showCreateForm() {
+            document.getElementById('create-form').classList.remove('hidden');
+        }
+
+        function hideCreateForm() {
+            document.getElementById('create-form').classList.add('hidden');
+            // Clear form
+            document.getElementById('issueTitle').value = '';
+            document.getElementById('issueDescription').value = '';
+        }
+
+        async function createIssue() {
+            const title = document.getElementById('issueTitle').value;
+            const description = document.getElementById('issueDescription').value;
+            const category = document.getElementById('issueCategory').value;
+            const priority = document.getElementById('issuePriority').value;
+
+            if (!title.trim()) {
+                alert('Title is required');
+                return;
+            }
+
+            try {
+                await apiCall('/issues', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        project_id: 'demo-project', // For demo
+                        title,
+                        description,
+                        category,
+                        priority
+                    })
+                });
+
+                hideCreateForm();
+                loadIssues(); // Refresh
+            } catch (err) {
+                alert('Failed to create issue');
+                console.error('Create issue error:', err);
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('authToken');
+            authToken = null;
+            currentUser = null;
+            if (ws) ws.close();
+            
+            document.getElementById('auth-section').classList.remove('hidden');
+            document.getElementById('app-section').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
