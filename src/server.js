@@ -10,6 +10,7 @@ const authRoutes = require('./routes/auth');
 const issueRoutes = require('./routes/issues');
 const projectRoutes = require('./routes/projects');
 const fileRoutes = require('./routes/files');
+const adminRoutes = require('./routes/admin');
 
 const app = express();
 const server = createServer(app);
@@ -27,8 +28,8 @@ app.use(cors({
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // 100 requests per window
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100 // 100 requests per window
 });
 app.use(limiter);
 
@@ -40,7 +41,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static('uploads'));
 app.use('/', express.static('public'));
 
-// Health check
+// Health check (moved to admin routes for more detailed status)
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
@@ -50,6 +51,26 @@ app.use('/api/auth', authRoutes);
 app.use('/api/issues', issueRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/files', fileRoutes);
+app.use('/api/admin', adminRoutes);
+
+// API documentation endpoint
+app.get('/api', (req, res) => {
+  res.json({
+    name: 'Construction Issue Tracker API',
+    version: '1.0.0',
+    description: 'Ultra-lightweight construction project issue management system',
+    endpoints: {
+      auth: '/api/auth/*',
+      issues: '/api/issues/*',
+      projects: '/api/projects/*',
+      files: '/api/files/*',
+      admin: '/api/admin/* (admin only)'
+    },
+    docs: 'https://github.com/ViranjPatel/construction-issue-tracker',
+    health: '/health',
+    timestamp: new Date().toISOString()
+  });
+});
 
 // WebSocket connection handling
 wss.on('connection', (ws, req) => {
@@ -95,6 +116,8 @@ app.use('*', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🚀 Construction Issue Tracker running on port ${PORT}`);
   console.log(`📊 Health check: http://localhost:${PORT}/health`);
+  console.log(`🔧 API docs: http://localhost:${PORT}/api`);
+  console.log(`🎨 Web interface: http://localhost:${PORT}`);
 });
